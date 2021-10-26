@@ -14,7 +14,7 @@ func main() {
 	s := server.NewServer(&server.Config{
 		Hostname:                 "",
 		Port:                     port,
-		PersistenceFilePath:      "./key-record.txt",
+		PersistenceFilePath:      "../key-record.txt",
 		PersistenceWriteDuration: time.Duration(1000),
 	})
 
