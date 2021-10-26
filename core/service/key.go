@@ -4,6 +4,7 @@ import (
 	"dh-api/core/repository"
 	"encoding/json"
 	"errors"
+	"sync"
 	"time"
 )
 
@@ -12,18 +13,20 @@ type KeyValueMap map[string]string
 const InvalidKeyError = "key must be a string value"
 const KeyNotFound = "key not found"
 
-type KeyService struct{
+var mutex = sync.Mutex{}
+
+type KeyService struct {
 	tickerDuration time.Duration
-	fileRepo repository.FileRepositoryInterface
-	keysAndValue KeyValueMap
+	fileRepo       repository.FileRepositoryInterface
+	keysAndValue   KeyValueMap
 }
 
-type KeyServiceInterface interface{
+type KeyServiceInterface interface {
 	SetKey(key, value string) error
-	GetKey(key string) (string,error)
+	GetKey(key string) (string, error)
 }
 
-func NewKeyService(repo repository.FileRepositoryInterface, tickerDuration time.Duration) *KeyService{
+func NewKeyService(repo repository.FileRepositoryInterface, tickerDuration time.Duration) *KeyService {
 	service := &KeyService{
 		tickerDuration: tickerDuration,
 		fileRepo:       repo,
@@ -32,7 +35,7 @@ func NewKeyService(repo repository.FileRepositoryInterface, tickerDuration time.
 	read, err := repo.Read()
 	if err == nil && read != nil {
 		_ = json.Unmarshal(read.([]byte), &service.keysAndValue)
-	} else{
+	} else {
 		service.keysAndValue = map[string]string{}
 	}
 
@@ -41,18 +44,20 @@ func NewKeyService(repo repository.FileRepositoryInterface, tickerDuration time.
 	return service
 }
 
-func (s *KeyService) SetKey(key, value string) error{
+func (s *KeyService) SetKey(key, value string) error {
 	if key == "" {
 		return errors.New(InvalidKeyError)
 	}
 
+	mutex.Lock()
 	s.keysAndValue[key] = value
+	mutex.Unlock()
 	return nil
 }
 
-func (s *KeyService) GetKey(key string) (string,error) {
-	if value,ok:= s.keysAndValue[key]; ok {
-		return value,nil
+func (s *KeyService) GetKey(key string) (string, error) {
+	if value, ok := s.keysAndValue[key]; ok {
+		return value, nil
 	}
 
 	return "", errors.New(KeyNotFound)
@@ -67,8 +72,10 @@ func (s *KeyService) persist() {
 
 	for {
 		select {
-		case <- ticker.C:
+		case <-ticker.C:
+			mutex.Lock()
 			_ = s.fileRepo.Write(s.keysAndValue)
+			mutex.Unlock()
 		}
 	}
 }
